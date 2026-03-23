@@ -1,7 +1,5 @@
 import { useMemo, useState } from 'react'
-
-const API_BASE = import.meta.env.VITE_MCP_API_URL || 'http://127.0.0.1:8000'
-const API_PATH = import.meta.env.VITE_MCP_CHAT_PATH || '/chat'
+import { buildApiUrl, CHAT_API_BASE, CHAT_API_PATH } from '../config/api.js'
 
 export default function ChatbotSidebar() {
   const [messages, setMessages] = useState([
@@ -10,7 +8,7 @@ export default function ChatbotSidebar() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const endpoint = useMemo(() => `${API_BASE}${API_PATH}`, [])
+  const endpoint = useMemo(() => buildApiUrl(CHAT_API_BASE, CHAT_API_PATH), [])
 
   const sendMessage = async (event) => {
     event.preventDefault()

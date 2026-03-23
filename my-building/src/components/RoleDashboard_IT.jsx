@@ -15,6 +15,7 @@ import {
   CategoryScale, LinearScale, Tooltip, Legend, Filler,
 } from "chart.js";
 import { Line, Bar } from "react-chartjs-2";
+import { buildApiUrl, POWER_API_BASE } from "../config/api.js";
 
 ChartJS.register(
   LineElement, BarElement, PointElement,
@@ -23,13 +24,8 @@ ChartJS.register(
 
 // ── API ────────────────────────────────────────────────────────────────────────
 
-const API_BASE = (
-  (typeof import.meta !== "undefined" && import.meta.env?.VITE_POWER_API_BASE) ||
-  "http://127.0.0.1:3000"
-).replace(/\/+$/, "");
-
 async function fetchApi(path, params = {}) {
-  const url = new URL(`${API_BASE}/${path.replace(/^\/+/, "")}`);
+  const url = new URL(buildApiUrl(POWER_API_BASE, path), window.location.origin);
   Object.entries(params).forEach(([k, v]) => {
     if (v != null && v !== "") url.searchParams.append(k, v);
   });

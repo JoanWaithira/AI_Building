@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import ChatbotIcon from "./ChatbotIcon";
 import ChatForm from "./ChatForm";
 import ChatMessage from "./ChatMessage";
+import { buildApiUrl, CHAT_API_BASE, CHAT_API_PATH } from "../config/api.js";
 
 const HINTS = [
   "Hi there! I'm your AI facility manager.",
@@ -252,7 +253,7 @@ const FacilityChatbot = () => {
 
     
 
-    const response = await fetch("/chat", {
+    const response = await fetch(buildApiUrl(CHAT_API_BASE, CHAT_API_PATH), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

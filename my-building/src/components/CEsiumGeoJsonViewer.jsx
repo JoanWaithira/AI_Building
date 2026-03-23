@@ -13,18 +13,17 @@ import ForecastPanel from "./ForecastPanel.jsx";
 import FaultPanel from "./FaultPanel.jsx";
 import { useFaultDetection } from "../hooks/useFaultDetection.js";
 import EnergyAnalyticsPanel from "./EnergyAnalyticsPanel.jsx";
+import {
+  buildApiUrl,
+  BUILDING_API_BASE,
+  POWER_API_BASE,
+} from "../config/api.js";
 
 const ION_TOKEN =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJlNDgxNjNjYS1kMTY1LTRhOTQtODFiZC1mYWMyNzY4OWVjN2YiLCJpZCI6MzQzOTQwLCJpYXQiOjE3NTg2MzQ0MTR9.pQiAchoUyxCsz38HgMWMnBs4ua7xTKPcbTE2s5EnbK4";
 const I3S_URL =
   "https://tiles-eu1.arcgis.com/XYGfXK4rEYwaj5A0/arcgis/rest/services/Gate_export_20241104_r23_reduced_20241114_notex/SceneServer";
 const GEOJSON_URL = "/floorplans/Floorplan_polygon_4326.geojson";
-const BUILDING_API_BASE = (
-  import.meta.env.VITE_BUILDING_API_BASE || "http://127.0.0.1:3001"
-).replace(/\/+$/, "");
-const POWER_API_BASE = (
-  import.meta.env.VITE_POWER_API_BASE || "http://127.0.0.1:3000"
-).replace(/\/+$/, "");
 const REPLAY_WINDOW_HOURS = 48;
 const CIRCUIT_CONFIGS = {
   main: { label: "Main", color: "#60A5FA" },
@@ -425,7 +424,10 @@ async function getBuildingJson(path, params = {}) {
   // If the fetch to this URL fails (e.g., due to CORS issues or the API being unavailable), it falls back to fetching the GeoJSON from a relative URL based on the current origin. 
   // This allows for flexibility in how the GeoJSON data is served, supporting both direct API access and static file hosting.
   const cleanPath = String(path || "").replace(/^\/+/, "");
-  const directUrl = new URL(`${BUILDING_API_BASE}/${cleanPath}`);
+  const directUrl = new URL(
+    buildApiUrl(BUILDING_API_BASE, cleanPath),
+    window.location.origin
+  );
   Object.entries(params).forEach(([key, value]) => {
     if (value != null && value !== "")
       directUrl.searchParams.append(key, value);
@@ -3469,7 +3471,10 @@ export default function CesiumGeoJsonViewer({ onFeatureClick }) {
 
 async function getPowerJson(path, params = {}) {
   const cleanPath = String(path || "").replace(/^\/+/, "");
-  const directUrl = new URL(`${POWER_API_BASE}/${cleanPath}`);
+  const directUrl = new URL(
+    buildApiUrl(POWER_API_BASE, cleanPath),
+    window.location.origin
+  );
   Object.entries(params).forEach(([key, value]) => {
     if (value != null && value !== "") directUrl.searchParams.append(key, value);
   });

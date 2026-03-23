@@ -1,6 +1,7 @@
 // Room Data Utilities - Manages room sensor data from PostgreSQL via PostgREST
 
-const BUILDING_API_BASE = (import.meta.env.VITE_BUILDING_API_BASE || '').replace(/\/+$/, '');
+import { BUILDING_API_BASE } from "../config/api.js";
+
 const API_BASES = { building: BUILDING_API_BASE };
 const getTimeRange = (days, endIso = null) => {
   const endDate = endIso ? new Date(endIso) : new Date();
