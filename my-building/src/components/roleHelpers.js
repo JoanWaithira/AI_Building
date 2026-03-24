@@ -151,6 +151,89 @@ export function circuitStats(replayData, circuitId) {
 export function fmtEur(v)  { return `€${Math.abs(v ?? 0).toFixed(0)}`; }
 export function fmtW(w)    { return w >= 1000 ? `${(w/1000).toFixed(1)} kW` : `${Math.round(w)} W`; }
 
+const CIRCUIT_FALLBACK_PROFILES = {
+  main: { base: 8200, peak: 18200, peakHour: 13, weekendFactor: 0.72 },
+  circuit6boiler: { base: 3200, peak: 8500, peakHour: 7, weekendFactor: 0.86 },
+  circuit7: { base: 400, peak: 2800, peakHour: 11, weekendFactor: 0.35 },
+  elevator: { base: 250, peak: 1500, peakHour: 12, weekendFactor: 0.3 },
+  circuit8: { base: 2100, peak: 4800, peakHour: 14, weekendFactor: 0.65 },
+  circuit9: { base: 1800, peak: 5200, peakHour: 10, weekendFactor: 0.48 },
+  circuit10: { base: 2400, peak: 6100, peakHour: 13, weekendFactor: 0.52 },
+  circuit11: { base: 1600, peak: 3900, peakHour: 10, weekendFactor: 0.46 },
+  circuit12: { base: 900, peak: 2200, peakHour: 12, weekendFactor: 0.42 },
+  airconditioner1: { base: 1400, peak: 4500, peakHour: 15, weekendFactor: 0.6 },
+  airconditioner2: { base: 1300, peak: 4200, peakHour: 15, weekendFactor: 0.58 },
+  outsidelighting1: { base: 150, peak: 1100, peakHour: 21, weekendFactor: 0.95 },
+  outsidelighting2: { base: 180, peak: 1250, peakHour: 21, weekendFactor: 0.95 },
+  vehiclecharging1: { base: 0, peak: 7000, peakHour: 18, weekendFactor: 0.7 },
+  vehiclecharging2: { base: 0, peak: 6500, peakHour: 19, weekendFactor: 0.7 },
+  "3DLED": { base: 300, peak: 1800, peakHour: 16, weekendFactor: 0.8 },
+  ovk: { base: 900, peak: 3000, peakHour: 14, weekendFactor: 0.74 },
+};
+
+function getCircuitFallbackProfile(circuitId) {
+  return CIRCUIT_FALLBACK_PROFILES[circuitId] || { base: 1000, peak: 3000, peakHour: 12, weekendFactor: 0.6 };
+}
+
+function synthCircuitWatts(circuitId, timestampMs) {
+  const profile = getCircuitFallbackProfile(circuitId);
+  const dt = new Date(timestampMs);
+  const hour = dt.getHours() + (dt.getMinutes() / 60);
+  const day = dt.getDay();
+  const isWeekend = day === 0 || day === 6;
+  const sigma = 3.2;
+  const gaussian = Math.exp(-Math.pow(hour - profile.peakHour, 2) / (2 * sigma * sigma));
+  const workHoursBoost = hour >= 7 && hour <= 20 ? 1 : 0.28;
+  const nightLightingBoost =
+    circuitId.startsWith("outsidelighting") ? (hour >= 18 || hour <= 6 ? 1.15 : 0.18) : 1;
+  const evChargingBoost =
+    circuitId.startsWith("vehiclecharging") ? ((hour >= 17 && hour <= 22) || (hour >= 7 && hour <= 9) ? 1 : 0.08) : 1;
+  const weekendFactor = isWeekend ? profile.weekendFactor : 1;
+  const harmonic = 0.08 * Math.sin((timestampMs / 3600000) * 0.9 + circuitId.length);
+  const watts =
+    (profile.base + (profile.peak - profile.base) * gaussian) *
+    workHoursBoost *
+    nightLightingBoost *
+    evChargingBoost *
+    weekendFactor *
+    (1 + harmonic);
+  return Math.max(0, Math.round(watts));
+}
+
+export function buildCircuitHistoryRows(circuitId, days = 7, replayData = {}) {
+  const sourceFrames = Array.isArray(replayData?.[circuitId]) ? replayData[circuitId] : [];
+  const stepMs = 15 * 60 * 1000;
+  const totalPoints = Math.max(2, Math.round((days * 24 * 60) / 15));
+  const endMs = Date.now();
+  const startMs = endMs - ((totalPoints - 1) * stepMs);
+
+  if (sourceFrames.length >= 2) {
+    return Array.from({ length: totalPoints }, (_, index) => {
+      const frame = sourceFrames[index % sourceFrames.length] || sourceFrames[sourceFrames.length - 1];
+      return {
+        ts_5min: new Date(startMs + (index * stepMs)).toISOString(),
+        value: Number(frame?.watts) || 0,
+        circuit_id: circuitId === "3DLED" ? "x3dled" : circuitId,
+      };
+    });
+  }
+
+  return Array.from({ length: totalPoints }, (_, index) => {
+    const timestampMs = startMs + (index * stepMs);
+    return {
+      ts_5min: new Date(timestampMs).toISOString(),
+      value: synthCircuitWatts(circuitId, timestampMs),
+      circuit_id: circuitId === "3DLED" ? "x3dled" : circuitId,
+    };
+  });
+}
+
+export function buildCircuitHistoryMap(circuitIds, days = 7, replayData = {}) {
+  return Object.fromEntries(
+    (circuitIds || []).map((id) => [id, buildCircuitHistoryRows(id, days, replayData)])
+  );
+}
+
 export function epcColor(r) {
   if (r === "A+" || r === "A") return "#4ADE80";
   if (r === "B"  || r === "C") return "#FBBF24";

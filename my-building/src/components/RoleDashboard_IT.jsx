@@ -5,7 +5,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   FONT, CIRCUIT_COLORS, CIRCUIT_LABELS,
-  computeBaseline, circuitStats, fmtW, dispatchCmd,
+  computeBaseline, circuitStats, fmtW, dispatchCmd, buildCircuitHistoryRows, buildCircuitHistoryMap,
 } from "./roleHelpers.js";
 import { Btn, SL, Pill, EmptyState, Hr } from "./panelUI.jsx";
 
@@ -239,7 +239,7 @@ function CircuitListView({ replayData, onSelect, onCompare }) {
 
 // ── 2. SINGLE CIRCUIT DETAIL ──────────────────────────────────────────────────
 
-function CircuitDetailView({ circuitId, onBack }) {
+function CircuitDetailView({ circuitId, replayData, onBack }) {
   const [rangeDays, setRangeDays] = useState(7);
   const [raw, setRaw]       = useState([]);
   const [loading, setLoading] = useState(false);
@@ -263,7 +263,11 @@ function CircuitDetailView({ circuitId, onBack }) {
           limit: 1,
         });
         if (cancelled) return;
-        if (!latest?.length) { setRaw([]); setLoading(false); return; }
+        if (!latest?.length) {
+          setRaw(buildCircuitHistoryRows(circuitId, rangeDays, replayData));
+          setLoading(false);
+          return;
+        }
 
         const to = new Date(latest[0].ts_5min);
         const from = new Date(to.getTime() - rangeDays * 24 * 60 * 60 * 1000);
@@ -276,14 +280,18 @@ function CircuitDetailView({ circuitId, onBack }) {
           limit: 100000,
         });
         if (cancelled) return;
-        setRaw(Array.isArray(data) ? data : []);
+        const normalized = Array.isArray(data) ? data : [];
+        setRaw(normalized.length ? normalized : buildCircuitHistoryRows(circuitId, rangeDays, replayData));
       } catch (e) {
-        if (!cancelled) setError(e.message);
+        if (!cancelled) {
+          setRaw(buildCircuitHistoryRows(circuitId, rangeDays, replayData));
+          setError(null);
+        }
       }
       if (!cancelled) setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [circuitId, rangeDays]);
+  }, [circuitId, rangeDays, replayData]);
 
   // ── Compute aggregations ──────────────────────────────────────────────────
   const stats = useMemo(() => {
@@ -557,7 +565,7 @@ function CircuitDetailView({ circuitId, onBack }) {
 
 // ── 3. COMPARE MODE ───────────────────────────────────────────────────────────
 
-function CompareView({ onBack }) {
+function CompareView({ replayData, onBack }) {
   const allIds = Object.keys(CIRCUIT_COLORS);
   const [selected, setSelected] = useState(() => new Set(["main","circuit8","circuit9"]));
   const [rangeDays, setRangeDays] = useState(7);
@@ -584,7 +592,12 @@ function CompareView({ onBack }) {
           order: "ts_5min.desc",
           limit: 1,
         });
-        if (cancelled || !latest?.length) { setLoading(false); return; }
+        if (cancelled) return;
+        if (!latest?.length) {
+          setDataMap(buildCircuitHistoryMap([...selected], rangeDays, replayData));
+          setLoading(false);
+          return;
+        }
 
         const to = new Date(latest[0].ts_5min);
         const from = new Date(to.getTime() - rangeDays * 24 * 60 * 60 * 1000);
@@ -607,14 +620,16 @@ function CompareView({ onBack }) {
           if (!grouped[fid]) grouped[fid] = [];
           grouped[fid].push(r);
         });
-        setDataMap(grouped);
+        const fallbackMap = buildCircuitHistoryMap([...selected], rangeDays, replayData);
+        setDataMap({ ...fallbackMap, ...grouped });
       } catch (e) {
         console.warn("Compare fetch error:", e);
+        if (!cancelled) setDataMap(buildCircuitHistoryMap([...selected], rangeDays, replayData));
       }
       if (!cancelled) setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [selected, rangeDays]);
+  }, [selected, rangeDays, replayData]);
 
   // ── Build comparison charts ─────────────────────────────────────────────────
   const { overlayCfg, totalBarCfg, weekdayCfg } = useMemo(() => {
@@ -824,13 +839,14 @@ export default function ITView({ replayData }) {
   const [view, setView] = useState("list");
 
   if (view === "compare") {
-    return <CompareView onBack={() => setView("list")}/>;
+    return <CompareView replayData={replayData} onBack={() => setView("list")}/>;
   }
 
   if (typeof view === "object" && view.circuit) {
     return (
       <CircuitDetailView
         circuitId={view.circuit}
+        replayData={replayData}
         onBack={() => setView("list")}
       />
     );

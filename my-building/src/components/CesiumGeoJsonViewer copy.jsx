@@ -495,27 +495,35 @@ async function fetchLatestTrendSample(endpoint) {
   };
 }
 
+import { buildFallbackCircuitSample } from "../utils/circuitUtils";
+
 const fetchLatestCircuitSample = async (circuitId) => {
-  const rows = await getJson("/energy_harmonised_5min", {
-    select: "ts_5min,value,circuit_id",
-    circuit_id: `eq.${circuitId}`,
-    order: "ts_5min.desc",
-    limit: 1,
-  });
+  try {
+    const rows = await getJson("/energy_harmonised_5min", {
+      select: "ts_5min,value,circuit_id",
+      circuit_id: `eq.${circuitId}`,
+      order: "ts_5min.desc",
+      limit: 1,
+    });
 
-  if (!Array.isArray(rows) || !rows.length) {
-    return { circuitId, value: null, timestampMs: null };
+    if (!Array.isArray(rows) || !rows.length) {
+      // Fallback if no data
+      return buildFallbackCircuitSample(circuitId);
+    }
+
+    const row = rows[0];
+    const tsMs = new Date(row.ts_5min).getTime();
+    const value = Number(row.value);
+
+    return {
+      circuitId,
+      value: Number.isFinite(value) ? value : null,
+      timestampMs: Number.isFinite(tsMs) ? tsMs : Date.now(),
+    };
+  } catch (err) {
+    // Fallback if fetch fails
+    return buildFallbackCircuitSample(circuitId);
   }
-
-  const row = rows[0];
-  const tsMs = new Date(row.ts_5min).getTime();
-  const value = Number(row.value);
-
-  return {
-    circuitId,
-    value: Number.isFinite(value) ? value : null,
-    timestampMs: Number.isFinite(tsMs) ? tsMs : null,
-  };
 }
 
 function getEntityBaseColor(entity, telemetryByRoom, activeMetric) {
